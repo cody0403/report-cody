@@ -1,0 +1,786 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>互動式財務安全需求分析</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Chosen Palette: Calm Harmony -->
+    <!-- Application Structure Plan: A single-page application (SPA) featuring a persistent top navigation bar to switch between six distinct content sections (pages). This tab-based structure breaks down the complex analysis into manageable, thematic modules, fulfilling the user's "separate pages" requirement while maintaining a fluid user experience. The flow begins with the essential "Client Profile" to capture foundational data, then allows for non-linear exploration of the other financial modules. Real-time calculations and a dynamic chart in the "Family Budget" section transform the static form into an interactive "what-if" analysis tool, directly enhancing the value for both the financial advisor and the client. -->
+    <!-- Visualization & Content Choices: 
+        - Client Profile: (Inform) Standard HTML form for essential data gathering.
+        - Family Protection: (Compare/Analyze) Interactive HTML table with real-time JS calculations to instantly reveal the protection gap.
+        - Medical Protection: (Inform/Compare) Re-structured HTML form to align with modern Taiwanese insurance products (e.g., "重大傷疾病") and user specifications.
+        - Savings Planning: (Advise/Calculate) An interactive calculator using the standard financial PMT formula in JS to provide an accurate, actionable monthly investment suggestion based on an ROI.
+        - Retirement Planning: (Advise/Calculate) A simple calculator implementing the user-specified linear savings formula (Total / Years / 12) via JS.
+        - Family Budget: (Organize/Analyze) An HTML form paired with a dynamic Chart.js (Canvas) Donut chart to provide an intuitive visual breakdown of expenditures, plus a new Balance Sheet section.
+    -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <style>
+        body {
+            font-family: 'Inter', 'Noto Sans TC', sans-serif;
+            background-color: #F8F7F4; /* Warm Neutral Background */
+        }
+        .tab-button {
+            transition: all 0.3s ease;
+            border-bottom: 4px solid transparent;
+        }
+        .tab-button.active {
+            color: #2D3748; /* Darker Text for Active Tab */
+            border-bottom-color: #A58D78; /* Soft Terracotta Accent */
+            font-weight: 600;
+        }
+        .page {
+            display: none;
+        }
+        .page.active {
+            display: block;
+        }
+        .input-group {
+            display: flex;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+        .input-group label {
+            flex-basis: 40%;
+            padding-right: 1rem;
+            text-align: right;
+            color: #4A5568;
+        }
+        .input-field-container {
+            flex-basis: 60%;
+            display: flex;
+            align-items: center;
+        }
+        .input-field {
+            width: 100%;
+            padding: 0.5rem 0.75rem;
+            border: 1px solid #CBD5E0;
+            border-radius: 0.375rem;
+            background-color: #FFFFFF;
+        }
+        .input-field[readonly] {
+            background-color: #EDF2F7;
+            color: #4A5568;
+            font-weight: bold;
+        }
+        .unit {
+            margin-left: 0.5rem;
+            color: #718096;
+            flex-shrink: 0;
+        }
+        .chart-container {
+            position: relative; 
+            width: 100%; 
+            max-width: 400px; 
+            margin-left: auto; 
+            margin-right: auto; 
+            height: 300px;
+            max-height: 400px;
+        }
+        @media (min-width: 768px) {
+            .chart-container {
+                height: 350px;
+            }
+        }
+    </style>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+</head>
+<body class="antialiased text-gray-800">
+
+    <div id="app" class="container mx-auto p-4 md:p-8 max-w-7xl">
+        
+        <header class="bg-white/80 backdrop-blur-md sticky top-0 z-10 shadow-sm rounded-xl mb-8">
+            <nav class="flex flex-wrap justify-center items-center p-2 md:p-4 text-sm md:text-base text-gray-600">
+                <button data-page="profile" class="tab-button py-2 px-3 md:px-6 active">客戶個人資料</button>
+                <button data-page="family" class="tab-button py-2 px-3 md:px-6">家庭保障</button>
+                <button data-page="medical" class="tab-button py-2 px-3 md:px-6">醫療保障</button>
+                <button data-page="savings" class="tab-button py-2 px-3 md:px-6">儲蓄規劃</button>
+                <button data-page="retirement" class="tab-button py-2 px-3 md:px-6">退休規劃</button>
+                <button data-page="budget" class="tab-button py-2 px-3 md:px-6">家庭預算</button>
+            </nav>
+        </header>
+
+        <main>
+            <!-- Page: Client Profile -->
+            <section id="profile" class="page active bg-white p-6 md:p-8 rounded-xl shadow-md">
+                <h2 class="text-2xl font-bold mb-6 text-gray-700 border-l-4 border-[#A58D78] pl-4">客戶個人資料</h2>
+                <div class="space-y-4 max-w-2xl mx-auto">
+                    <div class="input-group">
+                        <label for="clientName">客戶名稱</label>
+                        <div class="input-field-container"><input type="text" id="clientName" class="input-field"></div>
+                    </div>
+                    <div class="input-group">
+                        <label for="advisorName">壽險顧問名稱</label>
+                        <div class="input-field-container"><input type="text" id="advisorName" class="input-field"></div>
+                    </div>
+                    <div class="input-group">
+                        <label for="reportDate">報表填寫時間</label>
+                        <div class="input-field-container"><input type="date" id="reportDate" class="input-field"></div>
+                    </div>
+                    <div class="input-group">
+                        <label for="clientDob">客戶出生年月日</label>
+                        <div class="input-field-container"><input type="date" id="clientDob" class="input-field ret-input"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Page: Family Protection -->
+            <section id="family" class="page bg-white p-6 md:p-8 rounded-xl shadow-md">
+                <h2 class="text-2xl font-bold mb-6 text-gray-700 border-l-4 border-[#A58D78] pl-4">家庭保障需求分析</h2>
+                <div class="grid md:grid-cols-2 gap-8">
+                    <div>
+                        <h3 class="text-lg font-semibold mb-4 text-gray-600">應備總額</h3>
+                        <div class="space-y-4">
+                            <div class="input-group">
+                                <label for="fam-life-expense">生活費用</label>
+                                <div class="input-field-container">
+                                    <input type="number" id="fam-life-expense-val" class="input-field fam-expense-input" placeholder="每月費用">
+                                    <span class="unit">萬/月</span>
+                                    <input type="number" id="fam-life-expense-yrs" class="input-field ml-2 fam-expense-input" placeholder="年期">
+                                    <span class="unit">年</span>
+                                </div>
+                            </div>
+                            <div class="input-group">
+                                <label for="fam-edu-expense">子女教育費用</label>
+                                <div class="input-field-container">
+                                    <input type="number" id="fam-edu-expense" class="input-field fam-expense-input">
+                                    <span class="unit">萬</span>
+                                </div>
+                            </div>
+                            <div class="input-group">
+                                <label for="fam-parent-expense">父母孝養費用</label>
+                                <div class="input-field-container">
+                                    <input type="number" id="fam-parent-expense-val" class="input-field fam-expense-input" placeholder="每月費用">
+                                    <span class="unit">萬/月</span>
+                                    <input type="number" id="fam-parent-expense-yrs" class="input-field ml-2 fam-expense-input" placeholder="年期">
+                                    <span class="unit">年</span>
+                                </div>
+                            </div>
+                             <div class="input-group">
+                                <label for="fam-mortgage">房屋貸款</label>
+                                <div class="input-field-container">
+                                    <input type="number" id="fam-mortgage" class="input-field fam-expense-input">
+                                    <span class="unit">萬</span>
+                                </div>
+                            </div>
+                             <div class="input-group">
+                                <label for="fam-car-loan">汽車貸款</label>
+                                <div class="input-field-container">
+                                    <input type="number" id="fam-car-loan" class="input-field fam-expense-input">
+                                    <span class="unit">萬</span>
+                                </div>
+                            </div>
+                             <div class="input-group">
+                                <label for="fam-other-loan">其他貸款</label>
+                                <div class="input-field-container">
+                                    <input type="number" id="fam-other-loan" class="input-field fam-expense-input">
+                                    <span class="unit">萬</span>
+                                </div>
+                            </div>
+                             <div class="input-group">
+                                <label for="fam-final-expense">最後費用</label>
+                                <div class="input-field-container">
+                                    <input type="number" id="fam-final-expense" class="input-field fam-expense-input">
+                                    <span class="unit">萬</span>
+                                </div>
+                            </div>
+                             <div class="input-group border-t pt-4 mt-4 border-gray-200">
+                                <label for="fam-total-needed">應備總額</label>
+                                <div class="input-field-container">
+                                    <input type="text" id="fam-total-needed" class="input-field" readonly>
+                                    <span class="unit">萬</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div>
+                        <h3 class="text-lg font-semibold mb-4 text-gray-600">已備總額</h3>
+                        <div class="space-y-4">
+                            <div class="input-group">
+                                <label for="fam-prepared-comm">商業保險</label>
+                                <div class="input-field-container">
+                                    <input type="number" id="fam-prepared-comm" class="input-field fam-prepared-input">
+                                    <span class="unit">萬</span>
+                                </div>
+                            </div>
+                            <div class="input-group">
+                                <label for="fam-prepared-social">社會保險</label>
+                                <div class="input-field-container">
+                                    <input type="number" id="fam-prepared-social" class="input-field fam-prepared-input">
+                                    <span class="unit">萬</span>
+                                </div>
+                            </div>
+                             <div class="input-group">
+                                <label for="fam-prepared-group">團體保險</label>
+                                <div class="input-field-container">
+                                    <input type="number" id="fam-prepared-group" class="input-field fam-prepared-input">
+                                    <span class="unit">萬</span>
+                                </div>
+                            </div>
+                             <div class="input-group">
+                                <label for="fam-prepared-savings">存款與投資</label>
+                                <div class="input-field-container">
+                                    <input type="number" id="fam-prepared-savings" class="input-field fam-prepared-input">
+                                    <span class="unit">萬</span>
+                                </div>
+                            </div>
+                            <div class="input-group">
+                                <label for="fam-prepared-asset">可變現資產</label>
+                                <div class="input-field-container">
+                                    <input type="number" id="fam-prepared-asset" class="input-field fam-prepared-input">
+                                    <span class="unit">萬</span>
+                                </div>
+                            </div>
+                            <div class="input-group border-t pt-4 mt-4 border-gray-200">
+                                <label for="fam-total-prepared">已備總額</label>
+                                <div class="input-field-container">
+                                    <input type="text" id="fam-total-prepared" class="input-field" readonly>
+                                    <span class="unit">萬</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="mt-8">
+                             <h3 class="text-lg font-semibold mb-4 text-gray-600">需求分析結果</h3>
+                             <div class="input-group bg-blue-50 p-4 rounded-lg">
+                                <label for="fam-gap" class="text-blue-800 font-bold">需求不足總額</label>
+                                <div class="input-field-container">
+                                    <input type="text" id="fam-gap" class="input-field border-blue-200" readonly>
+                                    <span class="unit font-bold text-blue-800">萬</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Page: Medical Protection -->
+            <section id="medical" class="page bg-white p-6 md:p-8 rounded-xl shadow-md">
+                <h2 class="text-2xl font-bold mb-6 text-gray-700 border-l-4 border-[#A58D78] pl-4">醫療保障需求分析</h2>
+                <div class="space-y-8">
+                    <!-- 住院醫療保障 -->
+                    <div>
+                        <h3 class="text-xl font-semibold mb-4 text-gray-600">住院醫療保障</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4 items-center">
+                            <div class="font-medium text-gray-500 text-right md:text-left">保障項目</div>
+                            <div class="font-medium text-gray-500">需求額度</div>
+                            
+                            <label class="text-right md:text-left py-2">每日收入補貼</label>
+                            <div class="input-field-container"><input type="number" class="input-field"> <span class="unit">元/日</span></div>
+                            
+                            <label class="text-right md:text-left py-2">每日病房費差額</label>
+                            <div class="input-field-container"><input type="number" class="input-field"> <span class="unit">元/日</span></div>
+
+                            <label class="text-right md:text-left py-2">每日看護費用</label>
+                            <div class="input-field-container"><input type="number" class="input-field"> <span class="unit">元/日</span></div>
+                        </div>
+                        <div class="max-w-3xl">
+                           <div class="input-group mt-4 pt-4 border-t border-gray-200">
+                                <label for="medical-total-prepared" class="font-bold text-gray-700">住院醫療已備總額</label>
+                                <div class="input-field-container">
+                                    <input type="number" id="medical-total-prepared" class="input-field">
+                                    <span class="unit">元/日</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 意外傷害保障 -->
+                    <div>
+                        <h3 class="text-xl font-semibold mb-4 text-gray-600">意外傷害保障</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-x-8 gap-y-4 items-center">
+                            <div class="font-medium text-gray-500 text-right md:text-left">保障項目</div>
+                            <div class="font-medium text-gray-500">需求額度</div>
+                            <div class="font-medium text-gray-500">已備總額</div>
+
+                            <label class="text-right md:text-left py-2">意外身故給付</label>
+                            <div class="input-field-container"><input type="number" class="input-field"> <span class="unit">萬</span></div>
+                            <div class="input-field-container"><input type="number" class="input-field"> <span class="unit">萬</span></div>
+                            
+                            <label class="text-right md:text-left py-2">意外實支實付限額</label>
+                            <div class="input-field-container"><input type="number" class="input-field"> <span class="unit">萬</span></div>
+                            <div class="input-field-container"><input type="number" class="input-field"> <span class="unit">萬</span></div>
+                        </div>
+                    </div>
+
+                    <!-- 癌症與重大傷疾病保障 -->
+                    <div>
+                        <h3 class="text-xl font-semibold mb-4 text-gray-600">癌症與重大傷疾病保障</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-x-8 gap-y-4 items-center">
+                            <div class="font-medium text-gray-500 text-right md:text-left">保障項目</div>
+                            <div class="font-medium text-gray-500">需求額度</div>
+                            <div class="font-medium text-gray-500">已備總額</div>
+
+                            <label class="text-right md:text-left py-2">癌症給付</label>
+                            <div class="input-field-container"><input type="number" class="input-field"> <span class="unit">萬</span></div>
+                            <div class="input-field-container"><input type="number" class="input-field"> <span class="unit">萬</span></div>
+
+                            <label class="text-right md:text-left py-2">重大傷疾病給付</label>
+                            <div class="input-field-container"><input type="number" class="input-field"> <span class="unit">萬</span></div>
+                            <div class="input-field-container"><input type="number" class="input-field"> <span class="unit">萬</span></div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Page: Savings Planning -->
+            <section id="savings" class="page bg-white p-6 md:p-8 rounded-xl shadow-md">
+                <h2 class="text-2xl font-bold mb-6 text-gray-700 border-l-4 border-[#A58D78] pl-4">儲蓄規劃</h2>
+                <div class="space-y-10">
+                    <!-- Plan 1 -->
+                    <div class="p-4 border border-gray-200 rounded-lg">
+                        <h3 class="text-xl font-semibold mb-4 text-gray-600">計畫一</h3>
+                        <div class="max-w-2xl mx-auto space-y-4">
+                            <div class="input-group">
+                                <label for="savings-name-1">計畫名稱</label>
+                                <div class="input-field-container"><input type="text" id="savings-name-1" class="input-field" placeholder="例如：子女教育基金"></div>
+                            </div>
+                            <div class="input-group">
+                                <label for="savings-goal-1">應準備金額</label>
+                                <div class="input-field-container"><input type="number" id="savings-goal-1" class="input-field savings-input-1"><span class="unit">元</span></div>
+                            </div>
+                            <div class="input-group">
+                                <label for="savings-years-1">可準備期間</label>
+                                <div class="input-field-container"><input type="number" id="savings-years-1" class="input-field savings-input-1"><span class="unit">年</span></div>
+                            </div>
+                            <div class="input-group">
+                                <label for="savings-roi-1">預估年投資報酬率</label>
+                                <div class="input-field-container"><input type="number" id="savings-roi-1" class="input-field savings-input-1"><span class="unit">%</span></div>
+                            </div>
+                            <div class="input-group bg-green-50 p-4 rounded-lg mt-8">
+                                <label for="savings-monthly-1" class="text-green-800 font-bold">每月建議投資金額</label>
+                                <div class="input-field-container"><input type="text" id="savings-monthly-1" class="input-field border-green-200" readonly><span class="unit font-bold text-green-800">元</span></div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Plan 2 -->
+                    <div class="p-4 border border-gray-200 rounded-lg">
+                        <h3 class="text-xl font-semibold mb-4 text-gray-600">計畫二</h3>
+                        <div class="max-w-2xl mx-auto space-y-4">
+                             <div class="input-group">
+                                <label for="savings-name-2">計畫名稱</label>
+                                <div class="input-field-container"><input type="text" id="savings-name-2" class="input-field" placeholder="例如：房屋頭期款"></div>
+                            </div>
+                            <div class="input-group">
+                                <label for="savings-goal-2">應準備金額</label>
+                                <div class="input-field-container"><input type="number" id="savings-goal-2" class="input-field savings-input-2"><span class="unit">元</span></div>
+                            </div>
+                            <div class="input-group">
+                                <label for="savings-years-2">可準備期間</label>
+                                <div class="input-field-container"><input type="number" id="savings-years-2" class="input-field savings-input-2"><span class="unit">年</span></div>
+                            </div>
+                            <div class="input-group">
+                                <label for="savings-roi-2">預估年投資報酬率</label>
+                                <div class="input-field-container"><input type="number" id="savings-roi-2" class="input-field savings-input-2"><span class="unit">%</span></div>
+                            </div>
+                            <div class="input-group bg-green-50 p-4 rounded-lg mt-8">
+                                <label for="savings-monthly-2" class="text-green-800 font-bold">每月建議投資金額</label>
+                                <div class="input-field-container"><input type="text" id="savings-monthly-2" class="input-field border-green-200" readonly><span class="unit font-bold text-green-800">元</span></div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Plan 3 -->
+                     <div class="p-4 border border-gray-200 rounded-lg">
+                        <h3 class="text-xl font-semibold mb-4 text-gray-600">計畫三</h3>
+                        <div class="max-w-2xl mx-auto space-y-4">
+                             <div class="input-group">
+                                <label for="savings-name-3">計畫名稱</label>
+                                <div class="input-field-container"><input type="text" id="savings-name-3" class="input-field" placeholder="例如：夢想旅遊基金"></div>
+                            </div>
+                            <div class="input-group">
+                                <label for="savings-goal-3">應準備金額</label>
+                                <div class="input-field-container"><input type="number" id="savings-goal-3" class="input-field savings-input-3"><span class="unit">元</span></div>
+                            </div>
+                            <div class="input-group">
+                                <label for="savings-years-3">可準備期間</label>
+                                <div class="input-field-container"><input type="number" id="savings-years-3" class="input-field savings-input-3"><span class="unit">年</span></div>
+                            </div>
+                            <div class="input-group">
+                                <label for="savings-roi-3">預估年投資報酬率</label>
+                                <div class="input-field-container"><input type="number" id="savings-roi-3" class="input-field savings-input-3"><span class="unit">%</span></div>
+                            </div>
+                            <div class="input-group bg-green-50 p-4 rounded-lg mt-8">
+                                <label for="savings-monthly-3" class="text-green-800 font-bold">每月建議投資金額</label>
+                                <div class="input-field-container"><input type="text" id="savings-monthly-3" class="input-field border-green-200" readonly><span class="unit font-bold text-green-800">元</span></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+            
+            <!-- Page: Retirement Planning -->
+            <section id="retirement" class="page bg-white p-6 md:p-8 rounded-xl shadow-md">
+                <h2 class="text-2xl font-bold mb-6 text-gray-700 border-l-4 border-[#A58D78] pl-4">退休規劃</h2>
+                <div class="max-w-2xl mx-auto space-y-4">
+                    <div class="input-group">
+                        <label for="ret-age">預計退休年齡</label>
+                        <div class="input-field-container">
+                            <input type="number" id="ret-age" class="input-field ret-input">
+                            <span class="unit">歲</span>
+                        </div>
+                    </div>
+                    <div class="input-group">
+                        <label for="ret-monthly-expense">預計退休後每月生活費</label>
+                        <div class="input-field-container">
+                            <input type="number" id="ret-monthly-expense" class="input-field ret-input">
+                            <span class="unit">元</span>
+                        </div>
+                    </div>
+                    <div class="input-group">
+                        <label for="ret-prep-years">預計退休準備年數</label>
+                        <div class="input-field-container">
+                            <input type="text" id="ret-prep-years" class="input-field" readonly>
+                            <span class="unit">年</span>
+                        </div>
+                    </div>
+                    <div class="input-group">
+                        <label for="ret-goal">應備總額</label>
+                        <div class="input-field-container">
+                            <input type="text" id="ret-goal" class="input-field" readonly>
+                            <span class="unit">元</span>
+                        </div>
+                    </div>
+                    <div class="input-group bg-indigo-50 p-4 rounded-lg mt-8">
+                        <label for="ret-monthly" class="text-indigo-800 font-bold">試算每月需存入金額</label>
+                        <div class="input-field-container">
+                            <input type="text" id="ret-monthly" class="input-field border-indigo-200" readonly>
+                            <span class="unit font-bold text-indigo-800">元</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+            
+            <!-- Page: Family Budget -->
+            <section id="budget" class="page bg-white p-6 md:p-8 rounded-xl shadow-md">
+                <h2 class="text-2xl font-bold mb-6 text-gray-700 border-l-4 border-[#A58D78] pl-4">家庭預算與資產負債</h2>
+                <div class="grid lg:grid-cols-2 gap-12">
+                    <div class="space-y-8">
+                        <!-- 收支 -->
+                        <div>
+                           <h3 class="text-xl font-semibold mb-4 text-gray-600">每月收支</h3>
+                            <!-- 收入 -->
+                            <div class="mb-6">
+                                <h4 class="text-lg font-semibold mb-3 text-green-600">收入</h4>
+                                <div class="space-y-4 pl-4 border-l-2 border-green-200">
+                                    <div class="input-group"><label for="income-self">本人</label><div class="input-field-container"><input type="number" id="income-self" class="input-field budget-income-input"><span class="unit">元</span></div></div>
+                                    <div class="input-group"><label for="income-spouse">配偶</label><div class="input-field-container"><input type="number" id="income-spouse" class="input-field budget-income-input"><span class="unit">元</span></div></div>
+                                    <div class="input-group"><label for="income-other">其他</label><div class="input-field-container"><input type="number" id="income-other" class="input-field budget-income-input"><span class="unit">元</span></div></div>
+                                    <div class="input-group border-t pt-4 mt-4 border-gray-200"><label for="income-total" class="font-bold">收入總計</label><div class="input-field-container"><input type="text" id="income-total" class="input-field" readonly><span class="unit font-bold">元</span></div></div>
+                                </div>
+                            </div>
+                            <!-- 支出 -->
+                             <div>
+                                <h4 class="text-lg font-semibold mb-3 text-red-600">支出</h4>
+                                 <div class="space-y-4 pl-4 border-l-2 border-red-200">
+                                    <div class="input-group"><label for="expense-food">伙食費</label><div class="input-field-container"><input type="number" data-label="伙食費" id="expense-food" class="input-field budget-expense-input"><span class="unit">元</span></div></div>
+                                    <div class="input-group"><label for="expense-transport">交通費</label><div class="input-field-container"><input type="number" data-label="交通費" id="expense-transport" class="input-field budget-expense-input"><span class="unit">元</span></div></div>
+                                    <div class="input-group"><label for="expense-leisure">休閒娛樂</label><div class="input-field-container"><input type="number" data-label="休閒娛樂" id="expense-leisure" class="input-field budget-expense-input"><span class="unit">元</span></div></div>
+                                    <div class="input-group"><label for="expense-edu">教育費</label><div class="input-field-container"><input type="number" data-label="教育費" id="expense-edu" class="input-field budget-expense-input"><span class="unit">元</span></div></div>
+                                    <div class="input-group"><label for="expense-utility">水電瓦斯</label><div class="input-field-container"><input type="number" data-label="水電瓦斯" id="expense-utility" class="input-field budget-expense-input"><span class="unit">元</span></div></div>
+                                    <div class="input-group"><label for="expense-comm">通訊費</label><div class="input-field-container"><input type="number" data-label="通訊費" id="expense-comm" class="input-field budget-expense-input"><span class="unit">元</span></div></div>
+                                    <div class="input-group"><label for="expense-tax">稅金</label><div class="input-field-container"><input type="number" data-label="稅金" id="expense-tax" class="input-field budget-expense-input"><span class="unit">元</span></div></div>
+                                    <div class="input-group"><label for="expense-insurance">保險費</label><div class="input-field-container"><input type="number" data-label="保險費" id="expense-insurance" class="input-field budget-expense-input"><span class="unit">元</span></div></div>
+                                    <div class="input-group"><label for="expense-mortgage">房貸/房租</label><div class="input-field-container"><input type="number" data-label="房貸/房租" id="expense-mortgage" class="input-field budget-expense-input"><span class="unit">元</span></div></div>
+                                    <div class="input-group"><label for="expense-other">其他支出</label><div class="input-field-container"><input type="number" data-label="其他支出" id="expense-other" class="input-field budget-expense-input"><span class="unit">元</span></div></div>
+                                    <div class="input-group border-t pt-4 mt-4 border-gray-200"><label for="expense-total" class="font-bold">支出總計</label><div class="input-field-container"><input type="text" id="expense-total" class="input-field" readonly><span class="unit font-bold">元</span></div></div>
+                                </div>
+                            </div>
+                            <!-- 餘額 -->
+                            <div class="mt-6">
+                                <div class="input-group bg-gray-100 p-4 rounded-lg"><label for="budget-balance" id="balance-label" class="font-bold text-gray-700">每月餘額 (收入 - 支出)</label><div class="input-field-container"><input type="text" id="budget-balance" class="input-field border-gray-300" readonly><span class="unit font-bold">元</span></div></div>
+                            </div>
+                        </div>
+                        <!-- 資產負債 -->
+                        <div class="mt-8">
+                            <h3 class="text-xl font-semibold mb-4 text-gray-600">資產負債表</h3>
+                             <!-- 資產 -->
+                            <div class="mb-6">
+                                <h4 class="text-lg font-semibold mb-3 text-blue-600">資產</h4>
+                                <div class="space-y-4 pl-4 border-l-2 border-blue-200">
+                                    <div class="input-group"><label for="asset-property">不動產</label><div class="input-field-container"><input type="number" id="asset-property" class="input-field balance-sheet-asset"><span class="unit">元</span></div></div>
+                                    <div class="input-group"><label for="asset-car">汽車</label><div class="input-field-container"><input type="number" id="asset-car" class="input-field balance-sheet-asset"><span class="unit">元</span></div></div>
+                                    <div class="input-group"><label for="asset-investment">投資</label><div class="input-field-container"><input type="number" id="asset-investment" class="input-field balance-sheet-asset"><span class="unit">元</span></div></div>
+                                    <div class="input-group"><label for="asset-savings">儲蓄</label><div class="input-field-container"><input type="number" id="asset-savings" class="input-field balance-sheet-asset"><span class="unit">元</span></div></div>
+                                    <div class="input-group"><label for="asset-other">其他</label><div class="input-field-container"><input type="number" id="asset-other" class="input-field balance-sheet-asset"><span class="unit">元</span></div></div>
+                                    <div class="input-group border-t pt-4 mt-4 border-gray-200"><label for="asset-total" class="font-bold">資產總計</label><div class="input-field-container"><input type="text" id="asset-total" class="input-field" readonly><span class="unit font-bold">元</span></div></div>
+                                </div>
+                            </div>
+                            <!-- 負債 -->
+                             <div class="mb-6">
+                                <h4 class="text-lg font-semibold mb-3 text-orange-600">負債</h4>
+                                <div class="space-y-4 pl-4 border-l-2 border-orange-200">
+                                    <div class="input-group"><label for="liability-mortgage">房貸</label><div class="input-field-container"><input type="number" id="liability-mortgage" class="input-field balance-sheet-liability"><span class="unit">元</span></div></div>
+                                    <div class="input-group"><label for="liability-other">其他</label><div class="input-field-container"><input type="number" id="liability-other" class="input-field balance-sheet-liability"><span class="unit">元</span></div></div>
+                                    <div class="input-group border-t pt-4 mt-4 border-gray-200"><label for="liability-total" class="font-bold">負債總計</label><div class="input-field-container"><input type="text" id="liability-total" class="input-field" readonly><span class="unit font-bold">元</span></div></div>
+                                </div>
+                            </div>
+                             <!-- 淨值 -->
+                            <div class="mt-6">
+                                <div class="input-group bg-gray-100 p-4 rounded-lg"><label for="net-worth" class="font-bold text-gray-700">資產淨值 (資產 - 負債)</label><div class="input-field-container"><input type="text" id="net-worth" class="input-field border-gray-300" readonly><span class="unit font-bold">元</span></div></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flex flex-col items-center justify-center pt-8 lg:pt-0">
+                         <h3 class="text-xl font-semibold mb-4 text-gray-600">支出結構分析</h3>
+                         <div class="chart-container">
+                             <canvas id="budgetChart"></canvas>
+                         </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+
+    // --- Page Navigation ---
+    const tabs = document.querySelectorAll('.tab-button');
+    const pages = document.querySelectorAll('.page');
+
+    tabs.forEach(tab => {
+        tab.addEventListener('click', () => {
+            const pageId = tab.dataset.page;
+
+            tabs.forEach(t => t.classList.remove('active'));
+            tab.classList.add('active');
+
+            pages.forEach(p => p.classList.remove('active'));
+            document.getElementById(pageId).classList.add('active');
+        });
+    });
+
+    // --- Set Default Date for Client Profile ---
+    const reportDateInput = document.getElementById('reportDate');
+    if (reportDateInput) {
+        reportDateInput.valueAsDate = new Date();
+    }
+
+    // --- Helper function to format numbers ---
+    const formatNumber = (num) => {
+        if (isNaN(num) || !isFinite(num)) {
+            return '0.000';
+        }
+        return num.toFixed(3);
+    };
+
+    const getNum = (id) => parseFloat(document.getElementById(id)?.value) || 0;
+
+    // --- Family Protection Calculation ---
+    const famExpenseInputs = document.querySelectorAll('.fam-expense-input');
+    const famPreparedInputs = document.querySelectorAll('.fam-prepared-input');
+
+    const calculateFamilyProtection = () => {
+        const lifeExpense = (getNum('fam-life-expense-val') * (getNum('fam-life-expense-yrs') || 1)) * 12;
+        const parentExpense = (getNum('fam-parent-expense-val') * (getNum('fam-parent-expense-yrs') || 1)) * 12;
+        
+        const totalNeeded = 
+            lifeExpense +
+            parentExpense +
+            getNum('fam-edu-expense') +
+            getNum('fam-mortgage') +
+            getNum('fam-car-loan') +
+            getNum('fam-other-loan') +
+            getNum('fam-final-expense');
+            
+        const totalPrepared = 
+            getNum('fam-prepared-comm') +
+            getNum('fam-prepared-social') +
+            getNum('fam-prepared-group') +
+            getNum('fam-prepared-savings') +
+            getNum('fam-prepared-asset');
+
+        const gap = totalNeeded - totalPrepared;
+
+        document.getElementById('fam-total-needed').value = formatNumber(totalNeeded);
+        document.getElementById('fam-total-prepared').value = formatNumber(totalPrepared);
+        document.getElementById('fam-gap').value = formatNumber(gap);
+    };
+
+    famExpenseInputs.forEach(input => input.addEventListener('input', calculateFamilyProtection));
+    famPreparedInputs.forEach(input => input.addEventListener('input', calculateFamilyProtection));
+    calculateFamilyProtection();
+
+    // --- Savings Planning Calculation ---
+    const setupSavingsPlan = (planNumber) => {
+        const inputs = document.querySelectorAll(`.savings-input-${planNumber}`);
+        const calculate = () => {
+            const fv = getNum(`savings-goal-${planNumber}`);
+            const years = getNum(`savings-years-${planNumber}`);
+            const annualRate = getNum(`savings-roi-${planNumber}`);
+
+            if (years <= 0 || fv <= 0) {
+                document.getElementById(`savings-monthly-${planNumber}`).value = '0.000';
+                return;
+            }
+
+            const rate = annualRate / 100 / 12;
+            const nper = years * 12;
+            
+            let monthlyPayment;
+            if (rate === 0) { // No interest
+                monthlyPayment = fv / nper;
+            } else {
+                monthlyPayment = (fv * rate) / (Math.pow(1 + rate, nper) - 1);
+            }
+            
+            document.getElementById(`savings-monthly-${planNumber}`).value = formatNumber(monthlyPayment);
+        };
+        inputs.forEach(input => input.addEventListener('input', calculate));
+        calculate();
+    };
+
+    setupSavingsPlan(1);
+    setupSavingsPlan(2);
+    setupSavingsPlan(3);
+
+    // --- Retirement Planning Calculation ---
+    const retInputs = document.querySelectorAll('.ret-input');
+    const calculateRetirement = () => {
+        const dobInput = document.getElementById('clientDob');
+        if (!dobInput.value) return;
+
+        const birthDate = new Date(dobInput.value);
+        const today = new Date();
+        let currentAge = today.getFullYear() - birthDate.getFullYear();
+        const m = today.getMonth() - birthDate.getMonth();
+        if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+            currentAge--;
+        }
+
+        const retirementAge = getNum('ret-age');
+        const monthlyExpense = getNum('ret-monthly-expense');
+
+        if (retirementAge <= currentAge) {
+            document.getElementById('ret-prep-years').value = '0.000';
+            document.getElementById('ret-goal').value = '0.000';
+            document.getElementById('ret-monthly').value = '0.000';
+            return;
+        }
+
+        const prepYears = retirementAge - currentAge;
+        // Assume life expectancy is 85 for calculation
+        const retirementYears = 85 - retirementAge > 0 ? 85 - retirementAge : 0;
+        const totalNeeded = monthlyExpense * 12 * retirementYears;
+        const monthlySaving = prepYears > 0 ? totalNeeded / prepYears / 12 : 0;
+
+        document.getElementById('ret-prep-years').value = formatNumber(prepYears);
+        document.getElementById('ret-goal').value = formatNumber(totalNeeded);
+        document.getElementById('ret-monthly').value = formatNumber(monthlySaving);
+    };
+    
+    retInputs.forEach(input => input.addEventListener('input', calculateRetirement));
+    calculateRetirement();
+
+    // --- Family Budget & Balance Sheet Calculation ---
+    let budgetChart;
+    const budgetIncomeInputs = document.querySelectorAll('.budget-income-input');
+    const budgetExpenseInputs = document.querySelectorAll('.budget-expense-input');
+    const balanceSheetAssetInputs = document.querySelectorAll('.balance-sheet-asset');
+    const balanceSheetLiabilityInputs = document.querySelectorAll('.balance-sheet-liability');
+    const budgetChartCanvas = document.getElementById('budgetChart');
+
+    const calculateBudgetAndBalanceSheet = () => {
+        // Budget
+        const totalIncome = Array.from(budgetIncomeInputs).reduce((sum, input) => sum + (parseFloat(input.value) || 0), 0);
+        const totalExpense = Array.from(budgetExpenseInputs).reduce((sum, input) => sum + (parseFloat(input.value) || 0), 0);
+        const balance = totalIncome - totalExpense;
+
+        document.getElementById('income-total').value = formatNumber(totalIncome);
+        document.getElementById('expense-total').value = formatNumber(totalExpense);
+        
+        const balanceInput = document.getElementById('budget-balance');
+        balanceInput.value = formatNumber(balance);
+        
+        const balanceLabel = document.getElementById('balance-label');
+        if (balance < 0) {
+            balanceInput.style.color = '#C53030'; // Red
+            balanceLabel.style.color = '#C53030';
+        } else {
+            balanceInput.style.color = '#2F855A'; // Green
+            balanceLabel.style.color = '#2F855A';
+        }
+        updateBudgetChart();
+
+        // Balance Sheet
+        const totalAssets = Array.from(balanceSheetAssetInputs).reduce((sum, input) => sum + (parseFloat(input.value) || 0), 0);
+        const totalLiabilities = Array.from(balanceSheetLiabilityInputs).reduce((sum, input) => sum + (parseFloat(input.value) || 0), 0);
+        const netWorth = totalAssets - totalLiabilities;
+
+        document.getElementById('asset-total').value = formatNumber(totalAssets);
+        document.getElementById('liability-total').value = formatNumber(totalLiabilities);
+        document.getElementById('net-worth').value = formatNumber(netWorth);
+    };
+
+    const updateBudgetChart = () => {
+        const labels = [];
+        const data = [];
+        budgetExpenseInputs.forEach(input => {
+            const value = parseFloat(input.value) || 0;
+            if (value > 0) {
+                labels.push(input.dataset.label);
+                data.push(value);
+            }
+        });
+
+        const chartData = {
+            labels: labels,
+            datasets: [{
+                data: data,
+                backgroundColor: [
+                    '#667EEA', '#ED64A6', '#4FD1C5', '#F6E05E', '#FC8181',
+                    '#9F7AEA', '#4299E1', '#68D391', '#F56565', '#ECC94B'
+                ],
+                hoverOffset: 4
+            }]
+        };
+
+        if (budgetChart) {
+            budgetChart.data = chartData;
+            budgetChart.update();
+        } else {
+            if (!budgetChartCanvas) return;
+            const ctx = budgetChartCanvas.getContext('2d');
+            budgetChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: chartData,
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    let label = context.label || '';
+                                    if (label) {
+                                        label += ': ';
+                                    }
+                                    if (context.parsed !== null) {
+                                        label += new Intl.NumberFormat('zh-TW').format(context.parsed) + ' 元';
+                                    }
+                                    return label;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+    };
+    
+    budgetIncomeInputs.forEach(input => input.addEventListener('input', calculateBudgetAndBalanceSheet));
+    budgetExpenseInputs.forEach(input => input.addEventListener('input', calculateBudgetAndBalanceSheet));
+    balanceSheetAssetInputs.forEach(input => input.addEventListener('input', calculateBudgetAndBalanceSheet));
+    balanceSheetLiabilityInputs.forEach(input => input.addEventListener('input', calculateBudgetAndBalanceSheet));
+    calculateBudgetAndBalanceSheet();
+
+});
+</script>
+</body>
+</html>
